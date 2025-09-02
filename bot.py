@@ -150,5 +150,7 @@ def main():
     app.run_polling()
 
 
+# Run both Flask + Bot
 if __name__ == "__main__":
-    main()
+    threading.Thread(target=run_bot).start()
+    app.run(host="0.0.0.0", port=5000)
