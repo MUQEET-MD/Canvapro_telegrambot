@@ -3,9 +3,9 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 import sqlite3
 
 # === BOT CONFIG ===
-BOT_TOKEN = "YOUR_BOT_TOKEN"  # apna BotFather se liya token daalo
-CHANNELS = ["@channel1", "@channel2", "@channel3"]  # force join channels
-ADMIN_GROUP = -1001234567890  # apna withdrawal group ID
+BOT_TOKEN = "8334907704:AAGUtA4tJWIwSPmrD_X2XfzY9wC59RTeu-w"  # apna BotFather se liya token daalo
+CHANNELS = ["@muqeetcanvaproofs", "@proofssent", "@muqeetcanvaofficial"]  # force join channels
+ADMIN_GROUP = -1002940360646  # apna withdrawal group ID
 
 # === DATABASE ===
 conn = sqlite3.connect("bot.db", check_same_thread=False)
@@ -67,7 +67,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         buttons.append([InlineKeyboardButton("✅ Check Again", callback_data="check")])
         reply_markup = InlineKeyboardMarkup(buttons)
         await update.message.reply_text(
-            "⚠️ Aapko age barhne ke liye pehle in channels ko join karna hoga:",
+            "⚠️ Please Join All Channels First :",
             reply_markup=reply_markup
         )
     else:
@@ -83,7 +83,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check Again
     if query.data == "check":
         if not await is_subscribed(context.application, user_id):
-            await query.edit_message_text("❌ Aapne abhi tak sab channels join nahi kiye.")
+            await query.edit_message_text("❌ You Cannot Join All The Channels .")
         else:
             await show_main_menu(update)
 
@@ -114,7 +114,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cur.execute("SELECT points FROM users WHERE user_id=?", (user_id,))
         points = cur.fetchone()[0]
         if points < 20:
-            await query.message.reply_text("⚠️ Aapke paas withdrawal ke liye kam se kam 20 points hone chahiye.")
+            await query.message.reply_text("⚠️ YOU NEED 20 POINTS TO WITHDRAWAL .")
             return
 
         # Deduct points
