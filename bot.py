@@ -1,3 +1,4 @@
+import asyncio
 import threading
 import sqlite3
 from flask import Flask
@@ -11,7 +12,7 @@ ADMIN_GROUP = -1002940360646
 DB_FILE = "bot.db"
 # ============================================
 
-# Flask app (to keep Render alive)
+# Flask app (Render needs port open)
 app = Flask(__name__)
 
 @app.route("/")
@@ -127,15 +128,18 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(chat_id=ADMIN_GROUP, text=msg)
             await query.message.reply_text("✅ Your Withdrawal Request has been sent to Admin. Please wait.")
 
-# Run bot in a thread
-def run_bot():
+# ============= RUN BOT =============
+async def run_bot():
     tg_app = Application.builder().token(BOT_TOKEN).build()
     tg_app.add_handler(CommandHandler("start", start))
     tg_app.add_handler(CallbackQueryHandler(button))
-    tg_app.run_polling()
+    await tg_app.run_polling()
 
-# Run both Flask + Bot
+def start_bot_loop():
+    asyncio.run(run_bot())
+
+# Run Flask + Bot
 if __name__ == "__main__":
-    threading.Thread(target=run_bot).start()
+    threading.Thread(target=start_bot_loop).start()
     app.run(host="0.0.0.0", port=5000)
-        
+    
