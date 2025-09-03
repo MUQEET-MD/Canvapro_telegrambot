@@ -4,20 +4,45 @@ from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
+# ================== CONFIG ==================
+BOT_TOKEN = "8334907704:AAGUtA4tJWIwSPmrD_X2XfzY9wC59RTeu-w"
+CHANNELS = ["@muqeetcanvaproofs", "@proofssent", "@muqeetcanvaofficial"]
+ADMIN_GROUP = -1002940360646
+DB_FILE = "bot.db"
+# ============================================
 
-# === BOT CONFIG ===
-BOT_TOKEN = "8334907704:AAGUtA4tJWIwSPmrD_X2XfzY9wC59RTeu-w"  # apna BotFather se liya token daalo
-CHANNELS = ["@muqeetcanvaproofs", "@proofssent", "@muqeetcanvaofficial"]  # force join channels
-ADMIN_GROUP = -1002940360646  # apna withdrawal group ID
+# Flask app (to keep Render alive)
+app = Flask(__name__)
 
-# === DATABASE ===
-conn = sqlite3.connect("bot.db", check_same_thread=False)
-cur = conn.cursor()
-cur.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, points INTEGER DEFAULT 0, referrals INTEGER DEFAULT 0)")
+@app.route("/")
+def home():
+    return "🤖 Bot is running fine!"
+
+# ============= DATABASE SETUP =============
+conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+cursor = conn.cursor()
+cursor.execute("""CREATE TABLE IF NOT EXISTS users (
+    user_id INTEGER PRIMARY KEY,
+    points INTEGER DEFAULT 0,
+    referrals INTEGER DEFAULT 0
+)""")
 conn.commit()
 
+def add_user(user_id):
+    cursor.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
+    conn.commit()
 
-# --- Force Join Check ---
+def update_points(user_id, points):
+    cursor.execute("UPDATE users SET points = points + ? WHERE user_id = ?", (points, user_id))
+    conn.commit()
+
+def get_points(user_id):
+    cursor.execute("SELECT points FROM users WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    return row[0] if row else 0
+# ===========================================
+
+# ============= TELEGRAM BOT CODE =============
 async def is_subscribed(app, user_id):
     for channel in CHANNELS:
         try:
@@ -28,40 +53,10 @@ async def is_subscribed(app, user_id):
             return False
     return True
 
-
-# --- Show Main Menu ---
-async def show_main_menu(update: Update, text="🏠 Main Menu"):
-    menu = InlineKeyboardMarkup([
-        [InlineKeyboardButton("👥 Invite Users", callback_data="invite")],
-        [InlineKeyboardButton("💰 Balance", callback_data="balance"),
-         InlineKeyboardButton("💵 Withdraw", callback_data="withdraw")],
-        [InlineKeyboardButton("📸 Proofs", callback_data="proofs"),
-         InlineKeyboardButton("📞 Support", url="https://t.me/YourSupport")],
-    ])
-
-    if update.message:
-        await update.message.reply_text(text, reply_markup=menu)
-    else:
-        await update.callback_query.edit_message_text(text, reply_markup=menu)
-
-
-# --- Start Command ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    args = context.args
+    add_user(user_id)
 
-    # Add user to DB
-    cur.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (user_id,))
-    conn.commit()
-
-    # Referral system
-    if args:
-        ref_id = int(args[0])
-        if ref_id != user_id:
-            cur.execute("UPDATE users SET points = points + 2, referrals = referrals + 1 WHERE user_id=?", (ref_id,))
-            conn.commit()
-
-    # Force join check
     if not await is_subscribed(context.application, user_id):
         buttons = [
             [InlineKeyboardButton(f"Join {ch}", url=f"https://t.me/{ch.replace('@','')}")]
@@ -70,90 +65,77 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         buttons.append([InlineKeyboardButton("✅ Check Again", callback_data="check")])
         reply_markup = InlineKeyboardMarkup(buttons)
         await update.message.reply_text(
-            "⚠️ Please Join All Channels First :",
+            "⚠️ You must join all the channels below to continue:",
             reply_markup=reply_markup
         )
     else:
-        await show_main_menu(update)
+        menu_buttons = [
+            [InlineKeyboardButton("👥 Invite Friends", callback_data="invite")],
+            [InlineKeyboardButton("🎁 Withdraw", callback_data="withdraw")],
+            [InlineKeyboardButton("📊 My Points", callback_data="points")]
+        ]
+        await update.message.reply_text("✅ Welcome to the Main Menu:", reply_markup=InlineKeyboardMarkup(menu_buttons))
 
-
-# --- Callback Buttons ---
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    user_id = query.from_user.id
     await query.answer()
+    user_id = query.from_user.id
+    username = query.from_user.username or "No Username"
 
-    # Check Again
     if query.data == "check":
         if not await is_subscribed(context.application, user_id):
-            await query.edit_message_text("❌ You Cannot Join All The Channels .")
+            await query.edit_message_text("❌ You have not joined all channels yet.")
         else:
-            await show_main_menu(update)
+            menu_buttons = [
+                [InlineKeyboardButton("👥 Invite Friends", callback_data="invite")],
+                [InlineKeyboardButton("🎁 Withdraw", callback_data="withdraw")],
+                [InlineKeyboardButton("📊 My Points", callback_data="points")]
+            ]
+            await query.edit_message_text("✅ Thank you! You have joined all channels.", reply_markup=InlineKeyboardMarkup(menu_buttons))
 
-    # Invite
     elif query.data == "invite":
-        ref_link = f"https://t.me/{context.bot.username}?start={user_id}"
-        await query.message.reply_text(f"🔗 Aapka referral link:\n{ref_link}\n\nHar ek referral pe aapko +2 points milenge!")
+        referral_link = f"https://t.me/{context.application.bot.username}?start={user_id}"
+        await query.message.reply_text(f"👥 Invite your friends using this link:\n{referral_link}\n\nYou earn 2 points for each referral!")
 
-    # Balance
-    elif query.data == "balance":
-        cur.execute("SELECT points, referrals FROM users WHERE user_id=?", (user_id,))
-        points, refs = cur.fetchone()
-        await query.message.reply_text(f"💰 Balance: {points} Points\n👥 Referrals: {refs}")
+    elif query.data == "points":
+        points = get_points(user_id)
+        await query.message.reply_text(f"📊 Your Current Balance: {points} Points")
 
-    # Withdraw
     elif query.data == "withdraw":
-        btns = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ Yes", callback_data="yes_withdraw"),
-             InlineKeyboardButton("❌ No", callback_data="no_withdraw")]
-        ])
-        await query.message.reply_text("⚠️ Confirm Your Withdrawal?", reply_markup=btns)
+        buttons = [
+            [InlineKeyboardButton("✅ Yes", callback_data="confirm_withdraw")],
+            [InlineKeyboardButton("❌ No", callback_data="cancel_withdraw")]
+        ]
+        await query.message.reply_text("⚠️ Confirm Your Withdrawal", reply_markup=InlineKeyboardMarkup(buttons))
 
-    elif query.data == "no_withdraw":
+    elif query.data == "cancel_withdraw":
         await query.message.reply_text("❌ Withdrawal Cancelled.")
-        await show_main_menu(update)
 
-    elif query.data == "yes_withdraw":
-        cur.execute("SELECT points FROM users WHERE user_id=?", (user_id,))
-        points = cur.fetchone()[0]
+    elif query.data == "confirm_withdraw":
+        points = get_points(user_id)
         if points < 20:
-            await query.message.reply_text("⚠️ YOU NEED 20 POINTS TO WITHDRAWAL .")
-            return
+            await query.message.reply_text("⚠️ You need at least 20 Points to withdraw.")
+        else:
+            update_points(user_id, -20)
+            msg = (
+                "🆕 New CANVA PRO PURCHASED 🎉\n\n"
+                f"👤 User: @{username}\n"
+                f"🆔 ID: {user_id}\n"
+                f"🛒 Bought: CANVA PRO\n"
+                f"💵 Price: 20 Points"
+            )
+            await context.bot.send_message(chat_id=ADMIN_GROUP, text=msg)
+            await query.message.reply_text("✅ Your Withdrawal Request has been sent to Admin. Please wait.")
 
-        # Deduct points
-        cur.execute("UPDATE users SET points = points - 20 WHERE user_id=?", (user_id,))
-        conn.commit()
-
-        # Send to Admin Group
-        msg = f"""🆕 New CANVA PRO PURCHASED 🎉
-
-👤 User:
-🤵 Username: @{query.from_user.username or 'NoUsername'}
-🆔 User ID: {user_id}
-🛒 Bought: CANVA PRO
-💵 Price: 20 Points
-"""
-        await context.bot.send_message(ADMIN_GROUP, msg)
-
-        # Notify user
-        await query.message.reply_text("✅ Your Withdrawal Request send to Admin.\nCheck Your Withdrawal @withdrawmassagegroup")
-
-    elif query.data == "proofs":
-        await query.message.reply_text("📸 Proofs section coming soon...")
-
-
-# --- Main ---
-def main():
-    app = Application.builder().token(BOT_TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button))
-
-    print("🤖 Bot started...")
-    app.run_polling()
-
+# Run bot in a thread
+def run_bot():
+    tg_app = Application.builder().token(BOT_TOKEN).build()
+    tg_app.add_handler(CommandHandler("start", start))
+    tg_app.add_handler(CallbackQueryHandler(button))
+    tg_app.run_polling()
 
 # Run both Flask + Bot
 if __name__ == "__main__":
     threading.Thread(target=run_bot).start()
     app.run(host="0.0.0.0", port=5000)
+        
