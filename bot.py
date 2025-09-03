@@ -1,6 +1,8 @@
+import threading
+from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-import sqlite3
+
 
 # === BOT CONFIG ===
 BOT_TOKEN = "8334907704:AAGUtA4tJWIwSPmrD_X2XfzY9wC59RTeu-w"  # apna BotFather se liya token daalo
