@@ -129,17 +129,17 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("✅ Your Withdrawal Request has been sent to Admin. Please wait.")
 
 # ============= RUN BOT =============
-async def run_bot():
+async def main():
     tg_app = Application.builder().token(BOT_TOKEN).build()
     tg_app.add_handler(CommandHandler("start", start))
     tg_app.add_handler(CallbackQueryHandler(button))
+
+    # Start Flask in a separate thread
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=5000)).start()
+
+    # Start Telegram Bot in main thread
     await tg_app.run_polling()
 
-def start_bot_loop():
-    asyncio.run(run_bot())
-
-# Run Flask + Bot
 if __name__ == "__main__":
-    threading.Thread(target=start_bot_loop).start()
-    app.run(host="0.0.0.0", port=5000)
-    
+    asyncio.run(main())
+                               
