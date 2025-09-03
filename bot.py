@@ -1,4 +1,3 @@
-import asyncio
 import threading
 import sqlite3
 from flask import Flask
@@ -129,17 +128,15 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text("✅ Your Withdrawal Request has been sent to Admin. Please wait.")
 
 # ============= RUN BOT =============
-async def main():
-    tg_app = Application.builder().token(BOT_TOKEN).build()
-    tg_app.add_handler(CommandHandler("start", start))
-    tg_app.add_handler(CallbackQueryHandler(button))
-
-    # Start Flask in a separate thread
-    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=5000)).start()
-
-    # Start Telegram Bot in main thread
-    await tg_app.run_polling()
+def run_bot():
+    application = Application.builder().token(BOT_TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button))
+    application.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(main())
-                               
+    # Flask in separate thread
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=5000)).start()
+    # Bot in main thread
+    run_bot()
+    
